@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>論理演算検索シミュレーター</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --secondary: #f5f7fa;
+            --text: #333;
+            --accent: #e74c3c;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--secondary);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            min-width: 200px;
+        }
+
+        select {
+            padding: 12px;
+            border: 2px solid var(--primary);
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .results-info {
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+            border-left: 4px solid var(--primary);
+            padding-left: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .card {
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            text-align: center;
+            transition: transform 0.2s;
+            background: #fff;
+        }
+
+        .card.hidden {
+            display: none;
+        }
+
+        .card.match {
+            border-color: var(--primary);
+            background-color: #ebf5ff;
+            transform: scale(1.05);
+        }
+
+        .tag {
+            display: inline-block;
+            background: #eee;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin: 2px;
+        }
+
+        .logic-desc {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Logic Search Lab</h1>
+        <p>キーワードを2つ入力して、検索条件の違いを体験しよう！</p>
+    </header>
+
+    <div class="search-box">
+        <input type="text" id="term1" placeholder="例: りんご" oninput="search()">
+        <select id="operator" onchange="search()">
+            <option value="AND">AND (かつ)</option>
+            <option value="OR">OR (または)</option>
+            <option value="NOT">NOT (〜を除外)</option>
+        </select>
+        <input type="text" id="term2" placeholder="例: 赤" oninput="search()">
+    </div>
+
+    <div id="info" class="results-info">
+        全データを表示中
+    </div>
+
+    <div class="grid" id="data-grid">
+        </div>
+
+    <div class="logic-desc" id="logic-text">
+        <strong>解説:</strong> 2つのキーワードを組み合わせて、より詳細な検索結果を得ることができます。
+    </div>
+</div>
+
+<script>
+    // サンプルデータ
+    const data = [
+        { name: "赤いりんご", tags: ["りんご", "赤", "果物"] },
+        { name: "青いりんご", tags: ["りんご", "青", "果物"] },
+        { name: "赤いトマト", tags: ["トマト", "赤", "野菜"] },
+        { name: "黄色いバナナ", tags: ["バナナ", "黄色", "果物"] },
+        { name: "赤いイチゴ", tags: ["イチゴ", "赤", "果物"] },
+        { name: "緑のピーマン", tags: ["ピーマン", "緑", "野菜"] },
+        { name: "青い空", tags: ["空", "青", "風景"] },
+        { name: "赤いバラ", tags: ["バラ", "赤", "花"] }
+    ];
+
+    function init() {
+        const grid = document.getElementById('data-grid');
+        data.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.innerHTML = `
+                <div style="font-weight:bold; margin-bottom:8px;">${item.name}</div>
+                <div>${item.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+            `;
+            grid.appendChild(div);
+        });
+        search();
+    }
+
+    function search() {
+        const t1 = document.getElementById('term1').value.trim().toLowerCase();
+        const t2 = document.getElementById('term2').value.trim().toLowerCase();
+        const op = document.getElementById('operator').value;
+        const cards = document.querySelectorAll('.card');
+        const info = document.getElementById('info');
+        const logicText = document.getElementById('logic-text');
+
+        let matchCount = 0;
+
+        cards.forEach((card, index) => {
+            const item = data[index];
+            const tagsStr = item.tags.join(' ').toLowerCase();
+            const nameStr = item.name.toLowerCase();
+            const fullText = tagsStr + " " + nameStr;
+
+            const hasT1 = t1 === "" || fullText.includes(t1);
+            const hasT2 = t2 === "" || fullText.includes(t2);
+
+            let isMatch = false;
+
+            if (t1 === "" && t2 === "") {
+                isMatch = true; // 入力がない場合はすべて表示
+            } else {
+                switch(op) {
+                    case "AND":
+                        isMatch = hasT1 && hasT2;
+                        break;
+                    case "OR":
+                        isMatch = hasT1 || hasT2;
+                        break;
+                    case "NOT":
+                        isMatch = hasT1 && !hasT2;
+                        break;
+                }
+            }
+
+            if (isMatch) {
+                card.classList.add('match');
+                card.classList.remove('hidden');
+                matchCount++;
+            } else {
+                card.classList.remove('match');
+                card.classList.add('hidden');
+            }
+        });
+
+        // 状態表示の更新
+        if (t1 === "" && t2 === "") {
+            info.innerText = "全データを表示中";
+        } else {
+            info.innerText = `${matchCount} 件見つかりました`;
+        }
+
+        // 解説テキストの動的更新
+        updateDescription(op, t1, t2);
+    }
+
+    function updateDescription(op, t1, t2) {
+        const logicText = document.getElementById('logic-text');
+        let text = "<strong>解説:</strong> ";
+        const v1 = t1 || "キーワード1";
+        const v2 = t2 || "キーワード2";
+
+        if (op === "AND") {
+            text += `「${v1}」と「${v2}」の<strong>両方を含む</strong>データを表示します。`;
+        } else if (op === "OR") {
+            text += `「${v1}」か「${v2}」の<strong>どちらか一方でも含む</strong>データを表示します。`;
+        } else {
+            text += `「${v1}」の中で「${v2}」を<strong>含まない</strong>データだけを表示します。`;
+        }
+        logicText.innerHTML = text;
+    }
+
+    window.onload = init;
+</script>
+
+</body>
+</html>
